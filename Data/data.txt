@@ -1,0 +1,2 @@
+Provincial scale analysis calls for each EESV dataset indipendently
+Regional scale analysis calls for complete dataset called RegionalData.csv
