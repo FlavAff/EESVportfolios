@@ -6,8 +6,8 @@ library(ggplot2)
 library(dplyr)
 library(scales)
 
-datP <- read.csv("../Results/Provincial/VarianceRatios.csv")
-datL <- read.csv("../Results/Local/VarianceRatios.csv")
+datP <- read.csv("../Results/Provincial/SyncMetrics.csv")
+datL <- read.csv("../Results/Local/SyncMetrics.csv")
 
 # Named vector to map EESV names to specific colors
 eesv_colors <- c(
@@ -18,7 +18,7 @@ eesv_colors <- c(
   "Demand" = "#B07AA1"  # A distinct purple
 )
 
-provincial <- ggplot(datP, aes(x = EESV, y = Relative.reduction.ratio, fill = EESV)) +
+provincial <- ggplot(datP, aes(x = EESV, y = Synchrony_Index, fill = EESV)) +
   
   # --- Create the bars ---
   # geom_col() is used for stat="identity" (values are provided)
@@ -33,9 +33,9 @@ provincial <- ggplot(datP, aes(x = EESV, y = Relative.reduction.ratio, fill = EE
   # Add actual values
   geom_text(
       # Override 'y' to place text at 30% of the bar height (closer to center)
-      aes(label = percent(Relative.reduction.ratio, accuracy = .1), y = Relative.reduction.ratio * 0.5), 
+      aes(label = round(Synchrony_Index, digits = 2), y = Synchrony_Index * 0.5), 
       color = "white",
-      size = 5,
+      size = 4,
       fontface = "bold" # Add bolding
     ) +
   
@@ -65,7 +65,7 @@ provincial <- ggplot(datP, aes(x = EESV, y = Relative.reduction.ratio, fill = EE
   )
 
 
-regional <- ggplot(datL, aes(x = EESV, y = Relative.reduction.ratio, fill = EESV)) +
+regional <- ggplot(datL, aes(x = EESV, y = Synchrony_Index, fill = EESV)) +
   
   # --- Create the bars ---
   # geom_col() is used for stat="identity" (values are provided)
@@ -83,7 +83,7 @@ regional <- ggplot(datL, aes(x = EESV, y = Relative.reduction.ratio, fill = EESV
   # Add actual values
   geom_text(
     # Override 'y' to place text at 30% of the bar height (closer to center)
-    aes(label = percent(Relative.reduction.ratio, accuracy = .1), y = Relative.reduction.ratio * 0.5), 
+    aes(label = round(Synchrony_Index, digits = 2), y = Synchrony_Index * 0.5), 
     color = "white",
     size = 4.5,
     fontface = "bold" # Add bolding
