@@ -232,23 +232,103 @@ synchrony_per_spp <- function(var,var_name,spp) {
 }
 
 
-# ---- Variance Reduction Test ----
-var_red_ratio <- function(EESV,variable,scale) {
-  # Reshape data to wide format (Years as rows, Species as columns)
-  df_wide <- EESV %>%
-    select(year, scale, variable) %>%
-    pivot_wider(names_from = scale, values_from = variable)
-  # Compute individual variances
-  indiv_variances <- apply(df_wide[-1], 2, var, na.rm = TRUE)
-  # Compute the variance of the mean time series (portfolio effect)
-  mean_series <- rowMeans(df_wide[-1], na.rm = TRUE)
-  portfolio_variance <- var(mean_series, na.rm = TRUE)
-  # Variance reduction metric
-  variance_reduction <- portfolio_variance / mean(indiv_variances) 
-  cat("Variance Reduction Ratio:", variance_reduction, "\n")
-  # Relative variance reduction metric
-  variance_reduction_ratio <- 1 - (portfolio_variance / mean(indiv_variances))
-  cat("Relative Variance Reduction:", variance_reduction_ratio, "\n")
+# --- Portfolio Metrics Function ---
+# Calculates:
+# 1. Component CVs (weighted) and Portfolio CV
+# 2. Portfolio Effect (PE) = Average CV / Portfolio CV
+# 3. Synchrony Index (phi) = Var(Sum) / (Sum(SD))^2
+# Includes optional detrending to separate long-term trends from volatility.
+
+calculate_portfolio_metrics <- function(data, variable, scale_col, detrend = TRUE) {
+  
+  # 1. Prepare Data: Pivot to wide format (Time x Component)
+  # Note: Keeping NAs here is actually safer for the lm() step as long as we use na.exclude
+  clean_data <- data |>
+    select(year, all_of(scale_col), all_of(variable)) 
+  
+  # Pivot wider to get matrix of time series
+  df_wide <- clean_data |>
+    pivot_wider(names_from = all_of(scale_col), values_from = all_of(variable)) |>
+    arrange(year)
+  
+  # Extract the time series matrix (excluding year column)
+  mat <- as.matrix(df_wide |> select(-year))
+  years <- df_wide$year
+  n_components <- ncol(mat)
+  
+  # 2. Detrending
+  component_stats <- data.frame(
+    component = colnames(mat),
+    mean = NA,
+    sd = NA,
+    variance = NA
+  )
+  
+  residuals_mat <- matrix(NA, nrow = nrow(mat), ncol = ncol(mat))
+  
+  for(i in 1:ncol(mat)) {
+    y <- mat[,i]
+    
+    # Mean is always based on raw abundance/catch
+    mu <- mean(y, na.rm = TRUE)
+    
+    # Check if we have enough data to even attempt a trend (at least 2 non-NA points)
+    if(detrend && sum(!is.na(y)) > 2) {
+      # Linear detrending
+      # FIX: na.action = na.exclude ensures the residuals vector is the same length as y
+      model <- lm(y ~ years, na.action = na.exclude)
+      res <- residuals(model)
+      sigma_sq <- var(res, na.rm = TRUE)
+      residuals_mat[,i] <- res
+    } else {
+      sigma_sq <- var(y, na.rm = TRUE)
+      # If detrend is FALSE or not enough data, use centered raw data
+      residuals_mat[,i] <- y - mu 
+    }
+    
+    component_stats$mean[i] <- mu
+    component_stats$variance[i] <- sigma_sq
+    component_stats$sd[i] <- sqrt(sigma_sq)
+  }
+  
+  # 3. Calculate Portfolio (Aggregate) Statistics
+  agg_mean <- sum(component_stats$mean, na.rm = TRUE)
+  agg_series <- rowSums(mat, na.rm = TRUE)
+  
+  if(detrend && sum(!is.na(agg_series)) > 2) {
+    # FIX: Applying na.exclude here as well for consistency
+    agg_model <- lm(agg_series ~ years, na.action = na.exclude)
+    agg_var <- var(residuals(agg_model), na.rm = TRUE)
+  } else {
+    agg_var <- var(agg_series, na.rm = TRUE)
+  }
+  agg_sd <- sqrt(agg_var)
+  
+  # 4. Calculate Final Metrics
+  
+  # A. Coefficient of Variation (CV)
+  # Weighted Avg CV = Sum(SD_i) / Sum(Mean_i)
+  weighted_avg_cv_components <- sum(component_stats$sd, na.rm = TRUE) / agg_mean
+  cv_portfolio <- agg_sd / agg_mean
+  
+  # B. Portfolio Effect (PE)
+  pe_ratio <- weighted_avg_cv_components / cv_portfolio
+  
+  # C. Synchrony Index (phi) - Loreau and de Mazancourt (2008)
+  # phi = Var(Sum) / (Sum(SD))^2
+  numerator_sync <- agg_var
+  denominator_sync <- (sum(component_stats$sd, na.rm = TRUE))^2
+  synchrony_phi <- numerator_sync / denominator_sync
+  
+  # Return results list
+  return(list(
+    CV_Portfolio = cv_portfolio,
+    CV_Avg_Components = weighted_avg_cv_components,
+    PE_Ratio = pe_ratio,
+    Synchrony_Phi = synchrony_phi,
+    N_Components = n_components,
+    Detrended = detrend
+  ))
 }
 
 # ---- Check synchrony by species pair ----
