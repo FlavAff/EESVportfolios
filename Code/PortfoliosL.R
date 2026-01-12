@@ -81,25 +81,57 @@ for (spp in unique(SES$species)) {
 
 
 
-####  VARIANCE REDUCTION TESTS ####
-for (spp in unique(SES$species)) {
-  dat <- SES |> filter(species == spp)
+####  PE & SYNCHRONY METRICS ####
+# Clean Data (handling NAs where abundance is missing)
+SES2 <- SES |>
+  mutate(
+    total_catch = ifelse(is.na(abundance) & total_catch == 0, NA, total_catch),
+    harvest = ifelse(is.na(abundance) & harvest == 0, NA, harvest),
+    landed = ifelse(is.na(abundance) & landed == 0, NA, landed)
+  )
+
+# Initialize results storage
+species_results <- data.frame()
+
+# List of EESV dimensions to analyze at regional scale
+metrics_to_analyze <- c("abundance", "total_catch", "landed")
+metric_names <- c("Ecological Supply", "Use", "Instrumental Value")
+
+# Loop through each species
+for (spp in unique(SES2$species)) {
+  print(paste("Analyzing Species:", spp))
   
-  if (spp == "Chum") {
-    dat <- dat |> filter(region != "Fraser")
+  # Filter for current species
+  dat <- SES2 |> filter(species == spp)
+  
+  # Special case for Chum: remove Fraser region as per original method
+  if(spp == "Chum") {
+    dat <- dat |> filter(region!= "Fraser")
   }
   
-  print(paste("Starting with species", spp))
-  print(paste("Calcuating for supply"))
-  var_red_ratio(dat, "abundance", "region")
-  print(paste("Calcuating for use"))
-  var_red_ratio(dat, "total_catch", "region")
-  print(paste("Calcuating for AC"))
-  var_red_ratio(dat, "total_effort", "region")
-  print(paste("Calcuating for IV"))
-  var_red_ratio(dat, "landed", "region")
+  # Loop through dimensions
+  for(i in seq_along(metrics_to_analyze)) {
+    var <- metrics_to_analyze[i]
+    name <- metric_names[i]
+    
+    # Calculate improved metrics
+    # Note: scale_col is "region" because we are looking at regional diversity within a species
+    res <- calculate_portfolio_metrics(dat, variable = var, scale_col = "region", detrend = TRUE)
+    
+    # Append to results
+    species_results <- rbind(species_results, data.frame(
+      Species = spp,
+      Dimension = name,
+      CV_Portfolio = round(res$CV_Portfolio, 3),
+      Avg_Regional_CV = round(res$CV_Avg_Components, 3),
+      PE_Ratio = round(res$PE_Ratio, 3),
+      Synchrony_Index = round(res$Synchrony_Phi, 3),
+      N_Regions = res$N_Components
+    ))
+  }
 }
 
+write_csv(species_results, "../Results/Local/SyncMetrics.csv")
 
 
 
