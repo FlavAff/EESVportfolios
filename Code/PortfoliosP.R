@@ -15,7 +15,7 @@ catch <- read_csv("../Data/CatchEESV.csv") |> group_by(year, species) |>
 supply <- read_csv("../Data/SupplyEESV.csv") |> 
   filter(!(species == "Chum" & region == "Fraser") & !(species == "Coho" & region == "VIMI"))|> group_by(year, species) |> 
   summarise(abundance = sum(abundance, na.rm = TRUE), .groups = 'drop')
-
+source("PortfolioFuns.R")
 
 # ---- Peaks and Troughs Test ----
 # Function to detect peaks and troughs
@@ -117,31 +117,17 @@ dev.off()
 
 
 
-# ---- Variance Reduction Test ----
-var_red_ratio <- function(EESV,variable,scale) {
-  # Reshape data to wide format (Years as rows, Species as columns)
-  df_wide <- EESV %>%
-    select(year, scale, variable) %>%
-    pivot_wider(names_from = scale, values_from = variable)
-  # Compute individual variances
-  indiv_variances <- apply(df_wide[-1], 2, var, na.rm = TRUE)
-  # Compute the variance of the mean time series (portfolio effect)
-  mean_series <- rowMeans(df_wide[-1], na.rm = TRUE)
-  portfolio_variance <- var(mean_series, na.rm = TRUE)
-  # Variance reduction metric
-  variance_reduction <- portfolio_variance / mean(indiv_variances) 
-  cat("Variance Reduction Ratio:", variance_reduction, "\n")
-  # Relative variance reduction metric
-  variance_reduction_ratio <- 1 - (portfolio_variance / mean(indiv_variances))
-  cat("Relative Variance Reduction:", variance_reduction_ratio, "\n")
-}
-
-var_red_ratio(value, "landed.value", "species")
-var_red_ratio(demand, "price.per.kilo.wholesale", "species")
-var_red_ratio(effort, "effort", "area")
-var_red_ratio(catch, "catch", "species")
-var_red_ratio(supply, "abundance", "species")
-
+# ---- Portfolio metrics ----
+#Supply
+calculate_portfolio_metrics(supply, variable = "abundance", scale_col = "species", detrend = TRUE)
+#Demand
+calculate_portfolio_metrics(demand, variable = "price.per.kilo.wholesale", scale_col = "species", detrend = TRUE)
+#Use
+calculate_portfolio_metrics(catch, variable = "catch", scale_col = "species", detrend = TRUE)
+#IV
+calculate_portfolio_metrics(value, variable = "landed.value", scale_col = "species", detrend = TRUE)
+#AC
+calculate_portfolio_metrics(effort, variable = "effort", scale_col = "area", detrend = TRUE)
 
 
 
